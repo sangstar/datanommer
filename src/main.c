@@ -10,7 +10,7 @@
 //  Each worker should be in an infinite loop waiting for "tasks" to do from the channels
 
 int main(void) {
-    FILE* file = fopen("/Users/sangersteel/CLionProjects/datanommer/data/test.txt", "r");
+    FILE* file = fopen("../data/test.txt", "r");
     if (file == NULL) {
         perror("Error opening file");
         return 1;
