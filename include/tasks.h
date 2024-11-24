@@ -14,6 +14,6 @@ typedef struct {
     job_t *job;
 } worker_t;
 
-char *change_char(char *data);
+char *op_change_char(char *data);
 
 #endif //DATANOMMER_TASKS_H

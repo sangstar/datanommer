@@ -7,4 +7,6 @@ add_executable(datanommer src/concurrent.c
         src/main.c
         include/concurrent.h
         src/tasks.c
-        include/tasks.h)
+        include/tasks.h
+        src/channels.c
+        include/channels.h)

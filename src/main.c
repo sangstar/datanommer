@@ -27,7 +27,7 @@ int main(void) {
     job_t *job = create_job(1, ctx,
                             ctx->writing_channel,
                             ctx->additional_channels[0],
-                            change_char);
+                            op_change_char);
     queue_job(job);
     wait_on_writing_thread(ctx),
             wait_job(job);

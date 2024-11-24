@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include "tasks.h"
+#include "channels.h"
 
 
 #define BUFFER_SIZE 128
@@ -41,16 +42,10 @@
        perror(msg);                                            \
        exit(1);                                                \
        }                                                       \
-                                                               \
-
-typedef struct {
-    char **data;
-    _Atomic int end_idx;
-    _Atomic int queued;
-} channel_t;
 
 
-typedef struct {
+
+typedef struct context_t {
     int num_additional_channels;
     FILE *file;
     channel_t *writing_channel;
@@ -76,15 +71,9 @@ typedef struct job_t {
 } job_t;
 
 
-void *file_to_writing_channel(void *arg);
-
-channel_t *new_channel();
-
 context_t *new_context(FILE *file, int num_channels);
 
 void destroy_context(context_t *ctx);
-
-void write_messages_to_channel(context_t *ctx);
 
 int wait_on_writing_thread(context_t *ctx);
 
