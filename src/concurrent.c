@@ -20,7 +20,7 @@ void *file_to_writing_channel(void *arg) {
     for (int i = 0; i < MAX_BUFFERS; i++) {
         printf("Writing data to %i\n", i);
         if (!fgets(ctx->writing_channel->data[i],
-                   sizeof(ctx->writing_channel->data[i]), ctx->file)) {
+                   BUFFER_SIZE, ctx->file)) {
             printf("end idx at %i\n", i);
             atomic_store(&ctx->writing_channel->end_idx, i);
             return NULL;
