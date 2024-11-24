@@ -5,4 +5,6 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(datanommer src/concurrent.c
         src/main.c
-        include/concurrent.h)
+        include/concurrent.h
+        src/tasks.c
+        include/tasks.h)

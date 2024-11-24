@@ -3,11 +3,15 @@
 //
 
 #include "../include/concurrent.h"
+#include "../include/tasks.h"
+
 #include <stdio.h>
 
-// TODO: Make channels for each "factory": a channel to put text in to,
-//  a channel to put processed text in to, etc
-//  Each worker should be in an infinite loop waiting for "tasks" to do from the channels
+// TODO:
+//  > Change print statements to some macro that only
+//   shows these print statements for a specific macro value at compilation
+//  > Continue extending this. At the processing function in `perform_queued_tasks`
+//  > Clean up the error handling
 
 int main(void) {
     FILE *file = fopen("../data/test.txt", "r");
@@ -16,14 +20,14 @@ int main(void) {
         return 1;
     }
 
-    context *ctx = new_context(file);
+    context_t *ctx = new_context(file, 3);
 
-    CHECK_ERR(write_messages_to_channel(ctx), "Writer thread creation failed.");
-    CHECK_ERR(read_data_from_channel(ctx), "Reader thread creation failed.");
-    CHECK_ERR(wait_on_writing_thread(ctx),
-              "Wait for writer threads termination failed.");
-    WAIT_THREAD(ctx, data_reading_thread_pool);
 
+    write_messages_to_channel(ctx);
+    job_t *job = create_job(1, ctx, ctx->writing_channel, change_char);
+    queue_job(job);
+    wait_on_writing_thread(ctx),
+            wait_job(job);
     destroy_context(ctx);
     return 0;
 }
