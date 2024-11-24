@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 
-void change_char(void *data) {
+char *change_char(char *data) {
     char *str = (char *) data;
-    printf("Received: %s", str);
+    return "Hello!";
 }

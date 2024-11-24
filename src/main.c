@@ -24,7 +24,10 @@ int main(void) {
 
 
     write_messages_to_channel(ctx);
-    job_t *job = create_job(1, ctx, ctx->writing_channel, change_char);
+    job_t *job = create_job(1, ctx,
+                            ctx->writing_channel,
+                            ctx->additional_channels[0],
+                            change_char);
     queue_job(job);
     wait_on_writing_thread(ctx),
             wait_job(job);
