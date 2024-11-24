@@ -94,10 +94,11 @@ int queue_job(job_t *job) {
                              perform_queued_tasks, worker);
         if (err != 0) {
             free(worker);
-            return err;
+            printf("Failed to create job for task.");
+            exit(1);
         }
     }
-    return err;
+    return 0;
 }
 
 int wait_job(job_t *job) {
@@ -157,13 +158,20 @@ int write_messages_to_channel(context_t *ctx) {
     err = pthread_create(&ctx->message_writing_thread, NULL,
                          file_to_writing_channel,
                          ctx);
-    return err;
+    if (err != 0) {
+        printf("Failed to create message writing thread.");
+        exit(1);
+    }
 }
 
 int wait_on_writing_thread(context_t *ctx) {
     int err = 0;
     err = pthread_join(ctx->message_writing_thread, NULL);
-    return err;
+    if (err != 0) {
+        printf("Failed waiting on message writing thread.");
+        exit(1);
+    }
+    return 0;
 }
 
 void destroy_context(context_t *ctx) {
