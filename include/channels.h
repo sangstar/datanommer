@@ -5,22 +5,24 @@
 #ifndef DATANOMMER_CHANNELS_H
 #define DATANOMMER_CHANNELS_H
 
-#include "concurrent.h"
-
-typedef struct context_t context_t;
-
-typedef struct {
-    char **data;
-    int capacity;
-    _Atomic int end_idx;
-    _Atomic int queued;
-} channel_t;
 
 void *file_to_writing_channel(void *arg);
+
+void *channel_to_file(void *arg);
+
+int channel_send(channel_t *channel, int idx);
+
+int channel_recv(channel_t *channel);
+
+int try_write(context_t *ctx, int idx);
+
+void write_channel_to_file(context_t *ctx);
 
 channel_t *new_channel();
 
 void write_messages_to_channel(context_t *ctx);
+
+int try_read_from_channel(channel_t *channel);
 
 void destroy_channel(channel_t *channel);
 

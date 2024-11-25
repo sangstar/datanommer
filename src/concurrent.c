@@ -4,9 +4,11 @@
 #include <string.h>
 
 
+
 job_t *
 create_job(int idx, context_t *ctx, channel_t *input_channel,
-           channel_t *output_channel, void (*func)(char *, char *)) {
+           channel_t *output_channel, void (*func)(context_t *, char *, char
+*)) {
     job_t *job = malloc(sizeof(job_t));
     CHECK_MALLOC(job, "Failed to allocate job.")
     job->idx = idx;
@@ -47,6 +49,9 @@ int wait_job(job_t *job) {
         }
         free(job->workers[i]);
     }
+    if (job->output_channel) {
+        job->output_channel->closed = 1;
+    }
     printf("Job complete\n");
     return 0;
 }
@@ -62,19 +67,23 @@ void destroy_context(context_t *ctx) {
         }
         destroy_channel(ctx->writing_channel);
         free(ctx->additional_channels);
+        fclose(ctx->input_file);
+        fclose(ctx->output_file);
         free(ctx);
+
     }
 }
 
 // TODO: I honestly don't need num_channels for a parameter
 //  but it doesn't hurt to make it extensible like this
 //  in case my parser needs more factories
-context_t *new_context(FILE *file, int num_channels) {
+context_t *new_context(FILE *input_file, FILE *output_file, int num_channels) {
 
 
     context_t *ctx = malloc(sizeof(context_t));
     CHECK_MALLOC(ctx, "Failed to allocate context.")
     ctx->writing_channel = new_channel();
+    ctx->file_writing_channel = new_channel();
     ctx->additional_channels = malloc(sizeof(channel_t *) * num_channels);
     CHECK_MALLOC(ctx->additional_channels, "Failed to allocate additional "
                                            "channels")
@@ -94,7 +103,8 @@ context_t *new_context(FILE *file, int num_channels) {
     }
     ctx->num_additional_channels = num_channels;
 
-    ctx->file = file;
+    ctx->input_file = input_file;
+    ctx->output_file = output_file;
 
     if (pthread_mutex_init(&ctx->mutex, NULL) != 0) {
         perror("Failed to initialize mutex.");
@@ -113,7 +123,19 @@ int wait_on_writing_thread(context_t *ctx) {
         printf("Failed waiting on message writing thread.");
         exit(1);
     }
+    ctx->writing_channel->closed = 1;
     printf("Writing thread finished.");
+    return 0;
+}
+
+int wait_on_file_writing_thread(context_t *ctx) {
+    int err = 0;
+    err = pthread_join(ctx->file_writing_thread, NULL);
+    if (err != 0) {
+        printf("Failed waiting on input_file writing thread.");
+        exit(1);
+    }
+    printf("File writing thread finished.");
     return 0;
 }
 

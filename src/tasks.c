@@ -14,17 +14,49 @@
 // It does the actual writing to the output channel by modifying
 // char *output_channel_data in place, and therefore doesn't return
 // anything to the caller.
-void op_change_char(char *input_channel_data, char *output_channel_data) {
+void op_make_json(context_t *ctx, char *input_channel_data, char
+*output_channel_data) {
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
-    strcat(str2, str);
-    strcat(str2, "And then..");
+    char *jsonl_beginning = strdup("{\"text\": \"");
+    char *jsonl_end = strdup("\"}\n\0");
+    char *output = malloc(strlen(jsonl_beginning) +
+                          strlen(jsonl_end) +
+                          strlen(str2));
+    strcat(output, jsonl_beginning);
+    strcat(output, str);
+    strcat(output, jsonl_end);
+    memcpy(str2, output, strlen(output));
+    printf("str2 is now %s", str2);
 }
 
-void op_write_zeros(char *input_channel_data, char *output_channel_data) {
+void op_escape_string(context_t *ctx, char *input_channel_data, char
+*output_channel_data) {
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
-    strcpy(str2, "Hewo");
+    for (int i = 0; i < strlen(str); ++i) {
+        switch (str[i]) {
+            case '"':
+                str2[i] = '\\';
+                str2[i + 1] = '"';
+                break;
+            case '\n':
+                str2[i] = '\\';
+                str2[i + 1] = 'n';
+                break;
+            default:
+                str2[i] = str[i];
+                str2[i + 1] = '\0';
+        }
+    }
+}
+
+
+// Ignore output channel data in this case. No writing to it.
+void op_write_to_file(context_t *ctx, char *input_channel_data, char
+*output_channel_data) {
+    printf("Writing to file: %s\n", input_channel_data);
+    fprintf(ctx->output_file, "%s", input_channel_data);
 }
 
 
@@ -77,57 +109,65 @@ void *perform_queued_tasks(void *arg) {
         // Lock the mutex to and ensure only worker accessing an idx
         // at once, preventing race conditions (so no two workers try to
         // snag the same idx)
+
+        /*
+         * Writer fills initial channel
+         * Workers look for an index with data in input channel
+         * When they find it, they claim that idx and do work
+         * They then fill that value for that idx in the output
+         * channel
+         */
+
+        // TODO: The way of having channels hand off data
+        //  to a worker is currently flawed. It doesn't work properly
         pthread_mutex_lock(&worker->job->context->mutex);
-        int idx = atomic_load(&worker->job->input_channel->queued);
-        int end_idx = atomic_load(&worker->job->input_channel->end_idx);
+        int idx = channel_recv(worker->job->input_channel);
+        pthread_mutex_unlock(&worker->job->context->mutex);
 
-        printf("Thread %i trying to pick up job %i with end job at %i\n",
-               worker->idx, idx, end_idx);
 
-        // If the queue has been completely exhausted, end.
-        if (idx >= end_idx | idx >= worker->job->input_channel->capacity) {
-            break;
-        } else {
-            printf("Thread %i doing work on job %i\n", worker->idx, idx);
+        if (idx == -1) {
+            // If the queue has been completely exhausted, end.
 
-            // Peek to see if there's data to work on. If none, go to
-            // beginning.
-            if (worker->job->input_channel->data[idx][0] == '\0') {
-                pthread_mutex_unlock(&worker->job->context->mutex);
+            // When should an input channel close?
+            // When there are no more writers to it
+            // When are there no more writers to it?
+            if (atomic_load(&worker->job->input_channel->closed) == 1) {
+                printf("Thread %i exiting without any work with idx for job %i "
+                       "\n",
+                       worker->idx, worker->job->idx);
+                break;
+            } else {
                 continue;
             }
 
-            // Snagged the idx at the top of the queue, so increment it by
-            // 1 so others can snag their own unique idx
-            atomic_store(&worker->job->input_channel->queued, idx + 1);
+        } else {
 
-            // Unlock the mutex as we're not needing to access anything
-            // and longer
-            pthread_mutex_unlock(&worker->job->context->mutex);
+            // Picked a job idx. Wait until there's data to
+            // work on.
+            printf("Thread %i claimed job (%i, %i)\n", worker->idx,
+                   worker->job->idx, idx);
 
-            printf("Ready to do work on task %i\n", idx);
+            if (worker->job->output_channel) {
+                worker->job->func
+                        (worker->job->context,
+                         worker->job->input_channel->data[idx],
+                         worker->job->output_channel->data[idx]);
+                pthread_mutex_lock(&worker->job->context->mutex);
+                channel_send(worker->job->output_channel, idx);
+                pthread_mutex_unlock(&worker->job->context->mutex);
 
-            // Perform the job and then go back to the outer while
-            // loop to pick up the next task from the queue
-            worker->job->func
-                    (worker->job->input_channel->data[idx],
-                     worker->job->output_channel->data[idx]);
 
-            // Increment the end idx. This is basically a way of
-            // keeping a record for other workers how many jobs
-            // have been complete, so if the last worker picked up
-            // job queued where queued = end_idx + 1, they know
-            // the previous worker completed the final task
-            // and can break.
-            int output_end_idx = atomic_load
-            (&worker->job->output_channel->end_idx);
-            atomic_store(&worker->job->output_channel->end_idx,
-                         output_end_idx + 1);
+            } else {
+                worker->job->func
+                        (worker->job->context,
+                         worker->job->input_channel->data[idx],
+                         NULL);
+            }
+
+
         }
     }
-    pthread_mutex_unlock(&worker->job->context->mutex);
     printf("Thread %i finished. \n", worker->idx);
-
     // I don't actually check for this, but nice anyway
     worker->finished = 1;
     return NULL;

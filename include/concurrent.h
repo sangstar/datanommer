@@ -12,11 +12,10 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include "tasks.h"
-#include "channels.h"
 
 
 #define BUFFER_SIZE 128
-#define NUM_THREADS 5
+#define NUM_THREADS 4
 
 #define MAX_FILE_SIZE 8388608
 
@@ -44,14 +43,26 @@
        }                                                       \
 
 
+typedef struct {
+    char **data;
+    int is_full;
+    int is_empty;
+    int closed;
+    int capacity;
+    int queued[MAX_BUFFERS];
+    _Atomic int rear;
+} channel_t;
 
 typedef struct context_t {
     int num_additional_channels;
-    FILE *file;
+    FILE *input_file;
+    FILE *output_file;
     channel_t *writing_channel;
+    channel_t *file_writing_channel;
     channel_t **additional_channels;
     pthread_mutex_t mutex;
     pthread_t message_writing_thread;
+    pthread_t file_writing_thread;
 } context_t;
 
 
@@ -67,21 +78,23 @@ typedef struct job_t {
     pthread_t thread_pool[NUM_THREADS];
     worker_t **workers;
 
-    void (*func)(char *, char *);
+    void (*func)(context_t *, char *, char *);
 } job_t;
 
-
-context_t *new_context(FILE *file, int num_channels);
+context_t *new_context(FILE *input_file, FILE *output_file, int num_channels);
 
 void destroy_context(context_t *ctx);
 
 int wait_on_writing_thread(context_t *ctx);
 
+int wait_on_file_writing_thread(context_t *ctx);
+
 void *perform_queued_tasks(void *arg);
 
-job_t *
-create_job(int idx, context_t *ctx, channel_t *input_channel,
-           channel_t *output_channel, void (*func)(char *, char *));
+job_t *create_job(int idx, context_t *ctx, channel_t *input_channel,
+                  channel_t *output_channel,
+                  void (*func)(context_t *, char *, char
+                  *));
 
 int queue_job(job_t *job);
 
