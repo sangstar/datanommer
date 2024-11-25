@@ -67,7 +67,7 @@ typedef struct job_t {
     pthread_t thread_pool[NUM_THREADS];
     worker_t **workers;
 
-    char *(*func)(char *);
+    char *(*func)(char *, char *);
 } job_t;
 
 
@@ -81,7 +81,7 @@ void *perform_queued_tasks(void *arg);
 
 job_t *
 create_job(int idx, context_t *ctx, channel_t *input_channel,
-           channel_t *output_channel, char *(*func)(char *));
+           channel_t *output_channel, char *(*func)(char *, char *));
 
 int queue_job(job_t *job);
 

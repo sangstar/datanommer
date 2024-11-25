@@ -6,7 +6,7 @@
 
 job_t *
 create_job(int idx, context_t *ctx, channel_t *input_channel,
-           channel_t *output_channel, char *(*func)(char *)) {
+           channel_t *output_channel, char *(*func)(char *, char *)) {
     job_t *job = malloc(sizeof(job_t));
     CHECK_MALLOC(job, "Failed to allocate job.")
     job->idx = idx;
@@ -113,6 +113,7 @@ int wait_on_writing_thread(context_t *ctx) {
         printf("Failed waiting on message writing thread.");
         exit(1);
     }
+    printf("Writing thread finished.");
     return 0;
 }
 

@@ -28,13 +28,34 @@ void destroy_channel(channel_t *channel) {
 void *file_to_writing_channel(void *arg) {
     context_t *ctx = (context_t *) arg;
     for (int i = 0; i < MAX_BUFFERS; i++) {
-        printf("Writing data to %i\n", i);
         if (!fgets(ctx->writing_channel->data[i],
                    BUFFER_SIZE, ctx->file)) {
-            printf("end idx at %i\n", i);
-            atomic_store(&ctx->writing_channel->end_idx, i);
             return NULL;
         }
+        if (strcmp(ctx->writing_channel->data[i], "\n") == 0) {
+            // No bytes were written. Try this idx again.
+            printf("Retrying a write for %i.. \n", i);
+            if (i > 0) {
+                i--;
+                continue;
+            } else {
+
+                // In this case, i = 0, so we're forced to
+                // manually read again instead of decrementing
+                // and retrying the loop. Greedily keep
+                // trying until we no longer encounter a newline
+                while (strcmp(ctx->writing_channel->data[i], "\n") == 0) {
+                    if (!fgets(ctx->writing_channel->data[i],
+                               BUFFER_SIZE, ctx->file)) {
+                        return NULL;
+                    }
+                }
+
+            }
+        }
+        printf("Wrote data for job %i: %s\n", i,
+               ctx->writing_channel->data[i]);
+        atomic_store(&ctx->writing_channel->end_idx, i);
     }
     return NULL;
 }

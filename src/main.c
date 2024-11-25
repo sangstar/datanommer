@@ -31,6 +31,11 @@ int main(void) {
     queue_job(job);
     wait_on_writing_thread(ctx),
             wait_job(job);
+    job_t *second_job = create_job(1, ctx,
+                                   ctx->additional_channels[0],
+                                   ctx->additional_channels[1],
+                                   op_change_char);
+
     destroy_context(ctx);
     return 0;
 }

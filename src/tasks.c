@@ -7,9 +7,17 @@
 #include "../include/concurrent.h"
 #include "../include/channels.h"
 
-char *op_change_char(char *data) {
-    char *str = (char *) data;
-    return "Hello!";
+
+// op_-prepended functions will be the factory
+// functions that threads perform and pass
+// the processed data to the next channel.
+
+char *op_change_char(char *input_channel_data, char *output_channel_data) {
+    char *str = (char *) input_channel_data;
+    char *str2 = (char *) output_channel_data;
+    strcat(str2, str);
+    strcat(str2, "And then..");
+    return str2;
 }
 
 
@@ -17,7 +25,6 @@ void *perform_queued_tasks(void *arg) {
     worker_t *worker = (worker_t *) arg;
 
     printf("Thread %i entering loop..\n", worker->idx);
-
 
     while (1) {
 
@@ -50,16 +57,19 @@ void *perform_queued_tasks(void *arg) {
 
             // Claimed job id. Wait for data at that idx and perform task.
             while (1) {
-                if (strlen(worker->job->input_channel->data[idx]) != 0) {
+                if (strcmp(worker->job->input_channel->data[idx], "") > 0) {
                     printf("Ready to do work on task %i\n", idx);
 
                     // Perform the job and then go back to the outer while
                     // loop to pick up the next task from the queue
-                    char *return_val = worker->job->func
-                            (worker->job->input_channel->data[idx]);
-                    atomic_write_to_channel(worker->job->output_channel, idx,
-                                            return_val);
+                    worker->job->func
+                            (worker->job->input_channel->data[idx],
+                             worker->job->output_channel->data[idx]);
+
                     break;
+                } else {
+                    printf("No data for job %i: %s\n", idx,
+                           worker->job->input_channel->data[idx]);
                 }
             }
         }
