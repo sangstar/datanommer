@@ -20,6 +20,13 @@ char *op_change_char(char *input_channel_data, char *output_channel_data) {
     return str2;
 }
 
+char *op_write_zeros(char *input_channel_data, char *output_channel_data) {
+    char *str = (char *) input_channel_data;
+    char *str2 = (char *) output_channel_data;
+    strcpy(str2, "Hewo");
+    return str2;
+}
+
 
 void *perform_queued_tasks(void *arg) {
     worker_t *worker = (worker_t *) arg;
@@ -42,10 +49,17 @@ void *perform_queued_tasks(void *arg) {
                worker->idx, idx, end_idx);
 
         // If the queue has been completely exhausted, end.
-        if (idx >= end_idx) {
+        if (idx >= end_idx | idx >= worker->job->input_channel->capacity) {
             break;
         } else {
             printf("Thread %i doing work on job %i\n", worker->idx, idx);
+
+            // Peek to see if there's data to work on. If none, go to
+            // beginning.
+            if (worker->job->input_channel->data[idx][0] == '\0') {
+                pthread_mutex_unlock(&worker->job->context->mutex);
+                continue;
+            }
 
             // Snagged the idx at the top of the queue, so increment it by
             // 1 so others can snag their own unique idx
@@ -57,7 +71,7 @@ void *perform_queued_tasks(void *arg) {
 
             // Claimed job id. Wait for data at that idx and perform task.
             while (1) {
-                if (strcmp(worker->job->input_channel->data[idx], "") > 0) {
+                if (worker->job->input_channel->data[idx][0] != '\0') {
                     printf("Ready to do work on task %i\n", idx);
 
                     // Perform the job and then go back to the outer while
@@ -66,6 +80,11 @@ void *perform_queued_tasks(void *arg) {
                             (worker->job->input_channel->data[idx],
                              worker->job->output_channel->data[idx]);
 
+                    // Increment the end idx
+                    int output_end_idx = atomic_load
+                    (&worker->job->output_channel->end_idx);
+                    atomic_store(&worker->job->output_channel->end_idx,
+                                 output_end_idx + 1);
                     break;
                 } else {
                     printf("No data for job %i: %s\n", idx,

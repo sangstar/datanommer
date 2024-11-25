@@ -16,4 +16,7 @@ typedef struct {
 
 char *op_change_char(char *input_channel_data, char *output_channel_data);
 
+char *op_write_zeros(char *input_channel_data, char *output_channel_data);
+
+
 #endif //DATANOMMER_TASKS_H

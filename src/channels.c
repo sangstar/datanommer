@@ -90,7 +90,8 @@ channel_t *new_channel() {
             exit(EXIT_FAILURE);
         }
     }
-    chan->end_idx = MAX_BUFFERS;
+    chan->end_idx = 0;
+    chan->capacity = MAX_BUFFERS;
     return chan;
 }
 

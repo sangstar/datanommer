@@ -11,6 +11,7 @@ typedef struct context_t context_t;
 
 typedef struct {
     char **data;
+    int capacity;
     _Atomic int end_idx;
     _Atomic int queued;
 } channel_t;
