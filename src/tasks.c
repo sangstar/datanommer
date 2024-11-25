@@ -28,6 +28,42 @@ char *op_write_zeros(char *input_channel_data, char *output_channel_data) {
 }
 
 
+/*
+ * This is performed per worker and does the following:
+ * 1. Locks the mutex
+ * 2. Checks what the queued and end_idx fields are for
+ * the input channel (the channel where it receives tasks,
+ * does work, and sends the result to the output channel).
+ *
+ * The queued and end_idx fields are closely related. end_idx tells
+ * workers when there's no more tasks to fulfill from the input channel.
+ * If queued > end_idx, there are no more tasks to complete and the thread
+ * can exit the loop.
+ *
+ * queued acts as available indices from the input channel for workers
+ * to claim. When they do so, while holding the mutex, they see
+ * if data on the input channel exists on that index. If there is,
+ * it increments queued, telling other workers that the most recent
+ * work index to pick up is different since it's now handling the one
+ * previously at the top of queued.
+ *
+ * 3. Once it has its index to do work on and does the work, it
+ * sends that output to the output channel at the index it grabbed.
+ * 4. It then increments the end_idx of the output channel, basically saying
+ * "there is at least one job that was completable for the output channel
+ * because I just completed one". All workers doing this will accurately
+ * count how many jobs have been sent to this output channel. This way, if
+ * there is another processing stage where that output channel becomes the
+ * input channel for another factory, workers will know when they've
+ * exhausted the input channel because they have a record of how many tasks
+ * were completed when it was the output
+ * channel.
+ *
+ * 5. Once it completes that job, it goes to the beginning of the loop and
+ * once again sees if there's any work to do at index queued of the input
+ * channel. Again, if all work is complete, workers will have incremented
+ * queued above end_idx.
+ */
 void *perform_queued_tasks(void *arg) {
     worker_t *worker = (worker_t *) arg;
 
@@ -69,28 +105,24 @@ void *perform_queued_tasks(void *arg) {
             // and longer
             pthread_mutex_unlock(&worker->job->context->mutex);
 
-            // Claimed job id. Wait for data at that idx and perform task.
-            while (1) {
-                if (worker->job->input_channel->data[idx][0] != '\0') {
-                    printf("Ready to do work on task %i\n", idx);
+            printf("Ready to do work on task %i\n", idx);
 
-                    // Perform the job and then go back to the outer while
-                    // loop to pick up the next task from the queue
-                    worker->job->func
-                            (worker->job->input_channel->data[idx],
-                             worker->job->output_channel->data[idx]);
+            // Perform the job and then go back to the outer while
+            // loop to pick up the next task from the queue
+            worker->job->func
+                    (worker->job->input_channel->data[idx],
+                     worker->job->output_channel->data[idx]);
 
-                    // Increment the end idx
-                    int output_end_idx = atomic_load
-                    (&worker->job->output_channel->end_idx);
-                    atomic_store(&worker->job->output_channel->end_idx,
-                                 output_end_idx + 1);
-                    break;
-                } else {
-                    printf("No data for job %i: %s\n", idx,
-                           worker->job->input_channel->data[idx]);
-                }
-            }
+            // Increment the end idx. This is basically a way of
+            // keeping a record for other workers how many jobs
+            // have been complete, so if the last worker picked up
+            // job queued where queued = end_idx + 1, they know
+            // the previous worker completed the final task
+            // and can break.
+            int output_end_idx = atomic_load
+            (&worker->job->output_channel->end_idx);
+            atomic_store(&worker->job->output_channel->end_idx,
+                         output_end_idx + 1);
         }
     }
     pthread_mutex_unlock(&worker->job->context->mutex);
