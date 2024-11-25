@@ -6,7 +6,7 @@
 
 job_t *
 create_job(int idx, context_t *ctx, channel_t *input_channel,
-           channel_t *output_channel, char *(*func)(char *, char *)) {
+           channel_t *output_channel, void (*func)(char *, char *)) {
     job_t *job = malloc(sizeof(job_t));
     CHECK_MALLOC(job, "Failed to allocate job.")
     job->idx = idx;

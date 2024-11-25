@@ -11,20 +11,20 @@
 // op_-prepended functions will be the factory
 // functions that threads perform and pass
 // the processed data to the next channel.
-
-char *op_change_char(char *input_channel_data, char *output_channel_data) {
+// It does the actual writing to the output channel by modifying
+// char *output_channel_data in place, and therefore doesn't return
+// anything to the caller.
+void op_change_char(char *input_channel_data, char *output_channel_data) {
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
     strcat(str2, str);
     strcat(str2, "And then..");
-    return str2;
 }
 
-char *op_write_zeros(char *input_channel_data, char *output_channel_data) {
+void op_write_zeros(char *input_channel_data, char *output_channel_data) {
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
     strcpy(str2, "Hewo");
-    return str2;
 }
 
 
