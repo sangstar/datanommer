@@ -8,12 +8,6 @@
 
 #include <stdio.h>
 
-// TODO:
-//  > Change print statements to some macro that only
-//   shows these print statements for a specific macro value at compilation
-//  > Continue extending this. At the processing function in `perform_queued_tasks`
-//  > Clean up the error handling
-
 int main(void) {
     struct timeval start, end;
 
