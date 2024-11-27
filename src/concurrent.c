@@ -52,7 +52,7 @@ int wait_job(job_t *job) {
     if (job->output_channel) {
         job->output_channel->closed = 1;
     }
-    printf("Job complete\n");
+    LOG("Job complete\n");
     return 0;
 }
 
@@ -124,7 +124,7 @@ int wait_on_writing_thread(context_t *ctx) {
         exit(1);
     }
     ctx->writing_channel->closed = 1;
-    printf("Writing thread finished.");
+    LOG("Writing thread finished.");
     return 0;
 }
 
@@ -135,7 +135,7 @@ int wait_on_file_writing_thread(context_t *ctx) {
         printf("Failed waiting on input_file writing thread.");
         exit(1);
     }
-    printf("File writing thread finished.");
+    LOG("File writing thread finished.");
     return 0;
 }
 

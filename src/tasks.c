@@ -26,7 +26,7 @@ void op_make_json(context_t *ctx, char *input_channel_data, char
     strcat(output, str);
     strcat(output, "\"}\n\0");
     memcpy(str2, output, strlen(output));
-    printf("str2 is now %s", str2);
+    LOG("str2 is now %s", str2);
 }
 
 void op_escape_string(context_t *ctx, char *input_channel_data, char
@@ -35,16 +35,15 @@ void op_escape_string(context_t *ctx, char *input_channel_data, char
     char *str2 = (char *) output_channel_data;
     assert(output_channel_data[0] == '\0');
     for (int i = 0; i < strlen(str); ++i) {
-        printf("Output str so far is %s\n", str2);
-        printf("str[%i]: %c\n", i, str[i]);
+        LOG("Output str so far is %s\n", str2);
+        LOG("str[%i]: %c\n", i, str[i]);
         assert(i < strlen(str));
         assert(str[i] == input_channel_data[i]);
-        assert(strlen(str2) == i);
         assert(strlen(str2) <= MAX_BUFFERS + 100);
         switch (str[i]) {
             case '"':
-                printf("Spotted \" at %i\n", i);
-                char *quote = strdup("\"");
+                LOG("Spotted \" at %i\n", i);
+                char *quote = strdup("\\\"");
                 strcat(str2, quote);
                 int j;
                 if (strlen(quote) > 1) {
@@ -53,10 +52,10 @@ void op_escape_string(context_t *ctx, char *input_channel_data, char
                     }
                 }
                 free(quote);
-                printf("str2 after \": %s\n", str2);
+                LOG("str2 after \": %s\n", str2);
                 break;
             case '\n':
-                printf("Spotted \\n at %i\n", i);
+                LOG("Spotted \\n at %i\n", i);
                 char *newline = strdup("\\n");
                 strcat(str2, newline);
                 int k;
@@ -65,11 +64,11 @@ void op_escape_string(context_t *ctx, char *input_channel_data, char
                         i++;
                     }
                 }
-                printf("str2 after \\n: %s\n", str2);
+                LOG("str2 after \\n: %s\n", str2);
                 free(newline);
                 break;
             default:
-                printf("Adding to str2[%i]: %c\n", i, str[i]);
+                LOG("Adding to str2[%i]: %c\n", i, str[i]);
                 str2[i] = str[i];
         }
     }
@@ -79,7 +78,7 @@ void op_escape_string(context_t *ctx, char *input_channel_data, char
 // Ignore output channel data in this case. No writing to it.
 void op_write_to_file(context_t *ctx, char *input_channel_data, char
 *output_channel_data) {
-    printf("Writing to file: %s\n", input_channel_data);
+    LOG("Writing to file: %s\n", input_channel_data);
     fprintf(ctx->output_file, "%s", input_channel_data);
 }
 
@@ -98,7 +97,7 @@ void op_write_to_file(context_t *ctx, char *input_channel_data, char
 void *perform_queued_tasks(void *arg) {
     worker_t *worker = (worker_t *) arg;
 
-    printf("Thread %i entering loop..\n", worker->idx);
+    LOG("Thread %i entering loop..\n", worker->idx);
 
 
     while (1) {
@@ -120,8 +119,6 @@ void *perform_queued_tasks(void *arg) {
 
         assert(worker->job);
 
-        // TODO: The way of having channels hand off data
-        //  to a worker is currently flawed. It doesn't work properly
         pthread_mutex_lock(&worker->job->context->mutex);
         int idx = channel_recv(worker->job->input_channel);
         pthread_mutex_unlock(&worker->job->context->mutex);
@@ -130,11 +127,8 @@ void *perform_queued_tasks(void *arg) {
         if (idx == -1) {
             // If the queue has been completely exhausted, end.
 
-            // When should an input channel close?
-            // When there are no more writers to it
-            // When are there no more writers to it?
             if (atomic_load(&worker->job->input_channel->closed) == 1) {
-                printf("Thread %i exiting without any work with idx for job %i "
+                LOG("Thread %i exiting without any work with idx for job %i "
                        "\n",
                        worker->idx, worker->job->idx);
                 break;
@@ -147,7 +141,7 @@ void *perform_queued_tasks(void *arg) {
             assert(idx < worker->job->input_channel->max_capacity);
 
 
-            printf("Thread %i claimed job (%i, %i)\n", worker->idx,
+            LOG("Thread %i claimed job (%i, %i)\n", worker->idx,
                    worker->job->idx, idx);
 
 
@@ -174,7 +168,7 @@ void *perform_queued_tasks(void *arg) {
 
         }
     }
-    printf("Thread %i finished. \n", worker->idx);
+    LOG("Thread %i finished. \n", worker->idx);
     // I don't actually check for this, but nice anyway
     worker->finished = 1;
     return NULL;

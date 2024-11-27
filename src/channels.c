@@ -33,16 +33,16 @@ int channel_send(channel_t *channel, int idx) {
         channel->is_empty = 0;
     }
     // Append idx to queued
-    channel->queued[capacity + 1] = idx;
+    atomic_store(&channel->queued[capacity + 1], idx);
     atomic_store(&channel->capacity, capacity + 1);
     return 0;
 }
 
 int channel_recv(channel_t *channel) {
-    if (channel->is_empty) {
+    if (atomic_load(&channel->is_empty)) {
         return -1;
     }
-    if (channel->is_full) {
+    if (atomic_load(&channel->is_full)) {
         return -1;
     }
 
@@ -82,7 +82,7 @@ int try_write(context_t *ctx, int idx) {
     } else {
         if (strcmp(ctx->writing_channel->data[idx], "\n") == 0) {
             // No bytes were written. Try this idx again.
-            printf("Retrying a write for %i.. \n", idx);
+            LOG("Retrying a write for %i.. \n", idx);
             if (idx > 0) {
                 return idx - 1;
             } else {
@@ -106,7 +106,7 @@ int try_write(context_t *ctx, int idx) {
             }
         }
     }
-    printf("Writing job %i\n", idx);
+    LOG("Writing job %i\n", idx);
     pthread_mutex_lock(&ctx->mutex);
     channel_send(ctx->writing_channel, idx);
     pthread_mutex_unlock(&ctx->mutex);
@@ -142,8 +142,8 @@ channel_t *new_channel() {
     channel_t *chan = malloc(sizeof(channel_t));
     CHECK_MALLOC(chan, "Failed to allocate channel.")
 
-    size_t max_capacity = sizeof(char *) * MAX_BUFFERS;
-    size_t max_str_length = BUFFER_SIZE + 100;
+    _Atomic int max_capacity = sizeof(char *) * MAX_BUFFERS;
+    _Atomic int max_str_length = BUFFER_SIZE + 100;
 
     chan->data = malloc(max_capacity);
     CHECK_MALLOC(chan->data, "Failed to allocate data for channel.")
@@ -162,10 +162,10 @@ channel_t *new_channel() {
             exit(EXIT_FAILURE);
         }
     }
-    chan->is_empty = 1;
-    chan->closed = 0;
-    chan->is_full = 0;
-    chan->capacity = 0;
+    chan->is_empty = (_Atomic int) 1;
+    chan->closed = (_Atomic int) 0;
+    chan->is_full = (_Atomic int) 0;
+    chan->capacity = (_Atomic int) 0;
     chan->max_capacity = max_capacity;
     chan->max_str_len = max_str_length;
     return chan;

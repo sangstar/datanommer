@@ -14,10 +14,10 @@
 #include "tasks.h"
 
 
-#define BUFFER_SIZE 128
-#define NUM_THREADS 10
+#define BUFFER_SIZE 1000
+#define NUM_THREADS 4
 
-#define MAX_FILE_SIZE 8388608
+#define MAX_FILE_SIZE 800000000
 
 #define MAX_BUFFERS (MAX_FILE_SIZE / BUFFER_SIZE)
 
@@ -42,15 +42,20 @@
        exit(1);                                                \
        }                                                       \
 
+#ifdef NDEBUG
+#define LOG(...) ((void)0)
+#else
+#define LOG(...) printf(__VA_ARGS__)
+#endif
 
 typedef struct {
     char **data;
-    int is_full;
-    int is_empty;
-    int closed;
-    size_t capacity;
-    size_t max_capacity;
-    size_t max_str_len;
+    _Atomic int is_full;
+    _Atomic int is_empty;
+    _Atomic int closed;
+    _Atomic int capacity;
+    _Atomic int max_capacity;
+    _Atomic int max_str_len;
     int queued[MAX_BUFFERS];
     _Atomic int rear;
 } channel_t;
