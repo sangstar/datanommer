@@ -6,7 +6,27 @@
 #include "../include/tasks.h"
 #include "../include/concurrent.h"
 #include "../include/channels.h"
+#include "assert.h"
 
+
+char *add_at_index(char *string, int start_idx, char *to_add) {
+    int left_chars = strlen(string) - (strlen(string) - start_idx);
+    int right_chars = strlen(string) - left_chars;
+    assert(right_chars >= 0);
+    int shift_amount = strlen(to_add);
+    char *piece_1 = malloc(left_chars);
+    int shifted_size = strlen(string) + shift_amount;
+
+    memmove(piece_1, string, left_chars);
+    char *shifted = malloc(shifted_size + 1);
+    memmove(shifted, piece_1, left_chars);
+    strcat(shifted, to_add);
+    for (int i = left_chars; i < right_chars; i++) {
+        shifted[i + shift_amount] = string[i];
+    }
+    shifted[shifted_size + 1] = '\0';
+    return shifted;
+}
 
 // op_-prepended functions will be the factory
 // functions that threads perform and pass
@@ -16,6 +36,7 @@
 // anything to the caller.
 void op_make_json(context_t *ctx, char *input_channel_data, char
 *output_channel_data) {
+    assert(output_channel_data[0] == '\0');
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
     char *jsonl_beginning = strdup("{\"text\": \"");
@@ -32,21 +53,32 @@ void op_make_json(context_t *ctx, char *input_channel_data, char
 
 void op_escape_string(context_t *ctx, char *input_channel_data, char
 *output_channel_data) {
+    assert(output_channel_data[0] == '\0');
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
     for (int i = 0; i < strlen(str); ++i) {
+        assert(strlen(str2) == i);
         switch (str[i]) {
             case '"':
-                str2[i] = '\\';
-                str2[i + 1] = '"';
+                char *quote = strdup("\"");
+                str2 = add_at_index(str2, i, quote);
+                int j;
+                if (strlen(quote) > 1) {
+                    for (j = 0; j < strlen(quote); ++j) {
+                        i++;
+                    }
+                }
+                free(quote);
                 break;
             case '\n':
-                str2[i] = '\\';
-                str2[i + 1] = 'n';
+                char *newline = strdup("\\n");
+                str2 = add_at_index(str2, i, newline);
+                for (int j = 0; j < strlen(newline); ++j) {
+                    i++;
+                }
                 break;
             default:
                 str2[i] = str[i];
-                str2[i + 1] = '\0';
         }
     }
 }
@@ -63,38 +95,13 @@ void op_write_to_file(context_t *ctx, char *input_channel_data, char
 /*
  * This is performed per worker and does the following:
  * 1. Locks the mutex
- * 2. Checks what the queued and end_idx fields are for
- * the input channel (the channel where it receives tasks,
- * does work, and sends the result to the output channel).
- *
- * The queued and end_idx fields are closely related. end_idx tells
- * workers when there's no more tasks to fulfill from the input channel.
- * If queued > end_idx, there are no more tasks to complete and the thread
- * can exit the loop.
- *
- * queued acts as available indices from the input channel for workers
- * to claim. When they do so, while holding the mutex, they see
- * if data on the input channel exists on that index. If there is,
- * it increments queued, telling other workers that the most recent
- * work index to pick up is different since it's now handling the one
- * previously at the top of queued.
- *
- * 3. Once it has its index to do work on and does the work, it
- * sends that output to the output channel at the index it grabbed.
- * 4. It then increments the end_idx of the output channel, basically saying
- * "there is at least one job that was completable for the output channel
- * because I just completed one". All workers doing this will accurately
- * count how many jobs have been sent to this output channel. This way, if
- * there is another processing stage where that output channel becomes the
- * input channel for another factory, workers will know when they've
- * exhausted the input channel because they have a record of how many tasks
- * were completed when it was the output
- * channel.
- *
- * 5. Once it completes that job, it goes to the beginning of the loop and
- * once again sees if there's any work to do at index queued of the input
- * channel. Again, if all work is complete, workers will have incremented
- * queued above end_idx.
+ * 2. Gets the most recent index of the input channel data to do work on
+ * using channel_recv
+ * 3. Do work on the data
+ * 4. Send it off to the output channel with channel_send
+ * 5. Holds the mutex because even though I'm using some atomic
+ * ops in channel_recv and channel_send, race conditions can still
+ * occur
  */
 void *perform_queued_tasks(void *arg) {
     worker_t *worker = (worker_t *) arg;
@@ -142,8 +149,6 @@ void *perform_queued_tasks(void *arg) {
 
         } else {
 
-            // Picked a job idx. Wait until there's data to
-            // work on.
             printf("Thread %i claimed job (%i, %i)\n", worker->idx,
                    worker->job->idx, idx);
 

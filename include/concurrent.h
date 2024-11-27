@@ -15,7 +15,7 @@
 
 
 #define BUFFER_SIZE 128
-#define NUM_THREADS 4
+#define NUM_THREADS 10
 
 #define MAX_FILE_SIZE 8388608
 

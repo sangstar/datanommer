@@ -44,6 +44,7 @@ int channel_recv(channel_t *channel) {
     int idx = channel->queued[index_to_remove];
 
     // Remove index from queue
+
     if (index_to_remove == 0) {
         return -1;
     }
