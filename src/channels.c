@@ -5,6 +5,7 @@
 #include "../include/concurrent.h"
 #include "../include/tasks.h"
 #include <string.h>
+#include <assert.h>
 
 
 void destroy_channel(channel_t *channel) {
@@ -20,15 +21,20 @@ int channel_send(channel_t *channel, int idx) {
     if (channel->is_full == 1) {
         return 1;
     }
+    size_t max_capacity = atomic_load(&channel->max_capacity);
+    size_t capacity = atomic_load(&channel->capacity);
+    if (capacity + 1 == max_capacity) {
+        printf("AT MAX CAPACITY\n");
+        channel->is_full = 1;
+        return 1;
+    }
+
     if (channel->is_empty == 1) {
         channel->is_empty = 0;
     }
     // Append idx to queued
-    channel->queued[channel->capacity + 1] = idx;
-    atomic_store(&channel->capacity, channel->capacity + 1);
-    if (channel->capacity + 1 == MAX_BUFFERS) {
-        channel->is_full = 1;
-    }
+    channel->queued[capacity + 1] = idx;
+    atomic_store(&channel->capacity, capacity + 1);
     return 0;
 }
 
@@ -36,19 +42,25 @@ int channel_recv(channel_t *channel) {
     if (channel->is_empty) {
         return -1;
     }
+    if (channel->is_full) {
+        return -1;
+    }
+
     int index_to_remove = atomic_load(&channel->capacity);
     if (index_to_remove < 0 || index_to_remove >= MAX_BUFFERS) {
         printf("Invalid index\n");
         return -1;
     }
-    int idx = channel->queued[index_to_remove];
+    int idx = atomic_load(&channel->queued[index_to_remove]);
+    assert(idx < channel->max_capacity);
 
     // Remove index from queue
 
     if (index_to_remove == 0) {
         return -1;
     }
-    channel->queued[index_to_remove] = channel->queued[index_to_remove - 1];
+    atomic_store(&channel->queued[index_to_remove],
+                 channel->queued[index_to_remove - 1]);
     atomic_store(&channel->capacity, channel->capacity - 1);
     return idx;
 
@@ -129,12 +141,16 @@ void write_messages_to_channel(context_t *ctx) {
 channel_t *new_channel() {
     channel_t *chan = malloc(sizeof(channel_t));
     CHECK_MALLOC(chan, "Failed to allocate channel.")
-    chan->data = malloc(sizeof(char *) * MAX_BUFFERS);
+
+    size_t max_capacity = sizeof(char *) * MAX_BUFFERS;
+    size_t max_str_length = BUFFER_SIZE + 100;
+
+    chan->data = malloc(max_capacity);
     CHECK_MALLOC(chan->data, "Failed to allocate data for channel.")
 
     for (int i = 0; i < MAX_BUFFERS; i++) {
         // Add a bit of wiggle-room for the json characters to be added
-        chan->data[i] = malloc(BUFFER_SIZE + 100);
+        chan->data[i] = malloc(max_str_length);
         if (!chan->data[i]) {
             perror("Failed to allocate buffer for channel.");
             // Free already allocated data
@@ -150,6 +166,8 @@ channel_t *new_channel() {
     chan->closed = 0;
     chan->is_full = 0;
     chan->capacity = 0;
+    chan->max_capacity = max_capacity;
+    chan->max_str_len = max_str_length;
     return chan;
 }
 

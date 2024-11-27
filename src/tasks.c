@@ -8,26 +8,6 @@
 #include "../include/channels.h"
 #include "assert.h"
 
-
-char *add_at_index(char *string, int start_idx, char *to_add) {
-    int left_chars = strlen(string) - (strlen(string) - start_idx);
-    int right_chars = strlen(string) - left_chars;
-    assert(right_chars >= 0);
-    int shift_amount = strlen(to_add);
-    char *piece_1 = malloc(left_chars);
-    int shifted_size = strlen(string) + shift_amount;
-
-    memmove(piece_1, string, left_chars);
-    char *shifted = malloc(shifted_size + 1);
-    memmove(shifted, piece_1, left_chars);
-    strcat(shifted, to_add);
-    for (int i = left_chars; i < right_chars; i++) {
-        shifted[i + shift_amount] = string[i];
-    }
-    shifted[shifted_size + 1] = '\0';
-    return shifted;
-}
-
 // op_-prepended functions will be the factory
 // functions that threads perform and pass
 // the processed data to the next channel.
@@ -39,29 +19,33 @@ void op_make_json(context_t *ctx, char *input_channel_data, char
     assert(output_channel_data[0] == '\0');
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
-    char *jsonl_beginning = strdup("{\"text\": \"");
-    char *jsonl_end = strdup("\"}\n\0");
-    char *output = malloc(strlen(jsonl_beginning) +
-                          strlen(jsonl_end) +
-                          strlen(str2));
-    strcat(output, jsonl_beginning);
+    char *output = malloc(strlen("{\"text\": \"") +
+                          strlen("\"}\n\0") +
+                          strlen(str2) + 15);
+    strcat(output, "{\"text\": \"");
     strcat(output, str);
-    strcat(output, jsonl_end);
+    strcat(output, "\"}\n\0");
     memcpy(str2, output, strlen(output));
     printf("str2 is now %s", str2);
 }
 
 void op_escape_string(context_t *ctx, char *input_channel_data, char
 *output_channel_data) {
-    assert(output_channel_data[0] == '\0');
     char *str = (char *) input_channel_data;
     char *str2 = (char *) output_channel_data;
+    assert(output_channel_data[0] == '\0');
     for (int i = 0; i < strlen(str); ++i) {
+        printf("Output str so far is %s\n", str2);
+        printf("str[%i]: %c\n", i, str[i]);
+        assert(i < strlen(str));
+        assert(str[i] == input_channel_data[i]);
         assert(strlen(str2) == i);
+        assert(strlen(str2) <= MAX_BUFFERS + 100);
         switch (str[i]) {
             case '"':
+                printf("Spotted \" at %i\n", i);
                 char *quote = strdup("\"");
-                str2 = add_at_index(str2, i, quote);
+                strcat(str2, quote);
                 int j;
                 if (strlen(quote) > 1) {
                     for (j = 0; j < strlen(quote); ++j) {
@@ -69,15 +53,23 @@ void op_escape_string(context_t *ctx, char *input_channel_data, char
                     }
                 }
                 free(quote);
+                printf("str2 after \": %s\n", str2);
                 break;
             case '\n':
+                printf("Spotted \\n at %i\n", i);
                 char *newline = strdup("\\n");
-                str2 = add_at_index(str2, i, newline);
-                for (int j = 0; j < strlen(newline); ++j) {
-                    i++;
+                strcat(str2, newline);
+                int k;
+                if (strlen(newline) > 1) {
+                    for (k = 0; k < strlen(newline); ++k) {
+                        i++;
+                    }
                 }
+                printf("str2 after \\n: %s\n", str2);
+                free(newline);
                 break;
             default:
+                printf("Adding to str2[%i]: %c\n", i, str[i]);
                 str2[i] = str[i];
         }
     }
@@ -108,6 +100,7 @@ void *perform_queued_tasks(void *arg) {
 
     printf("Thread %i entering loop..\n", worker->idx);
 
+
     while (1) {
 
         // Snag the current queue idx and pass
@@ -124,6 +117,8 @@ void *perform_queued_tasks(void *arg) {
          * They then fill that value for that idx in the output
          * channel
          */
+
+        assert(worker->job);
 
         // TODO: The way of having channels hand off data
         //  to a worker is currently flawed. It doesn't work properly
@@ -149,14 +144,21 @@ void *perform_queued_tasks(void *arg) {
 
         } else {
 
+            assert(idx < worker->job->input_channel->max_capacity);
+
+
             printf("Thread %i claimed job (%i, %i)\n", worker->idx,
                    worker->job->idx, idx);
+
 
             if (worker->job->output_channel) {
                 worker->job->func
                         (worker->job->context,
                          worker->job->input_channel->data[idx],
                          worker->job->output_channel->data[idx]);
+
+                assert(worker->job);
+
                 pthread_mutex_lock(&worker->job->context->mutex);
                 channel_send(worker->job->output_channel, idx);
                 pthread_mutex_unlock(&worker->job->context->mutex);

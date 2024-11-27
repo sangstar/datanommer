@@ -19,7 +19,7 @@ int main(void) {
 
     gettimeofday(&start, NULL);
 
-    FILE *infile = fopen("../data/test.txt", "r");
+    FILE *infile = fopen("../data/bigfile.txt", "r");
     FILE *outfile = fopen("../data/output.jsonl", "w");
 
     if (infile == NULL) {

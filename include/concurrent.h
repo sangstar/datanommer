@@ -48,7 +48,9 @@ typedef struct {
     int is_full;
     int is_empty;
     int closed;
-    int capacity;
+    size_t capacity;
+    size_t max_capacity;
+    size_t max_str_len;
     int queued[MAX_BUFFERS];
     _Atomic int rear;
 } channel_t;
